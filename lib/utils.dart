@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:ds_queue_studentclient/config.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:dartzmq/dartzmq.dart';
 
 class Student {
   Student({required this.name, required this.id, required this.number});
@@ -29,21 +33,49 @@ class StudentContainer {
   }
 }
 
+class ZMQHelper {
+  static void getUpdate() {
+    final ZContext context = ZContext();
+    final ZSocket socket = context.createSocket(SocketType.sub);
+    socket.connect(Config.url);
+    socket.subscribe("");
+    socket.messages.listen((event) {
+      print(event.toString());
+    });
+  }
+}
+
 class NetHelper {
   String? defaultUrl;
   NetHelper({this.defaultUrl});
-  Future<void> get(String? url) async {
-    if (url == null) url = defaultUrl;
-    if (url == null) throw "No Url Specified.";
-    try {
-      var _client = http.Client();
-      var uri = Uri.parse("tcp://$url");
-      var response = await _client.get(uri, headers: {
-        'content-type': 'application/json'
-      }).timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {}
-    } catch (e) {
-      print(e);
+  Future<Response> _request(String? url,
+      {Map<String, String>? header,
+      Map<String, String>? body,
+      bool isPost = false}) async {
+    var client = http.Client();
+    var uri = Uri.parse("tcp://$url");
+    Future<Response> response;
+    if (!isPost) {
+      response = client
+          .get(uri, headers: header)
+          .timeout(const Duration(seconds: 3)) as Future<Response>;
+    } else {
+      response = client
+          .post(uri, headers: header, body: body)
+          .timeout(const Duration(seconds: 3)) as Future<Response>;
     }
+    return response;
+  }
+
+  Future<Response> get(String? url) async {
+    return _request(
+      url,
+      header: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> post(String? url, Map<String, String>? body) async {
+    return _request(url,
+        header: {'content-type': 'application/json'}, body: body, isPost: true);
   }
 }
