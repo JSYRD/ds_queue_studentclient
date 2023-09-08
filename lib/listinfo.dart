@@ -4,7 +4,7 @@ class ListInfo extends Padding {
   ListInfo({Key? key, required String title, required String data})
       : super(
             key: key,
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(14.0),
             child: OutlinedButton(
                 onPressed: () {},
                 child: Row(
@@ -14,7 +14,7 @@ class ListInfo extends Padding {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.only(top: 16),
+                          padding: const EdgeInsets.only(top: 12),
                           child: Text(
                             title,
                             style: const TextStyle(
@@ -23,7 +23,7 @@ class ListInfo extends Padding {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: Text(
                             data,
                             style: const TextStyle(
