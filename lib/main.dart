@@ -1,5 +1,12 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:dartzmq/dartzmq.dart';
+import 'package:ds_queue_studentclient/config.dart';
+import 'package:ds_queue_studentclient/listinfo.dart';
 import 'package:flutter/material.dart';
 import 'package:ds_queue_studentclient/utils.dart';
+import 'dart:isolate';
 
 void main() {
   runApp(const MyApp());
@@ -51,6 +58,11 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final StudentContainer _studentContainer = StudentContainer();
+  List<ListInfo> _queue = [];
+
+  final ZContext _context = ZContext();
+  late final ZSocket _socket;
+  late StreamSubscription _subscription;
 
   List<Text> wrapName2Text(List<String> names) {
     List<Text> ret = [];
@@ -61,10 +73,42 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   @override
+  void initState() {
+    _socket = _context.createSocket(SocketType.sub);
+    _socket.connect(Config.url);
+    _socket.subscribe("queue");
+    // print("test");
+    _subscription = _socket.messages.listen((event) {
+      var queue = json.decode(utf8.decode(event.last.payload));
+      setState(() {
+        List<ListInfo> newqueue = [];
+        for (var element in queue) {
+          newqueue.add(ListInfo(
+              title: element['name'], data: "ticket:${element['ticket']}"));
+        }
+        _queue = newqueue;
+      });
+    });
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _socket.close();
+    _context.stop();
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     var appBarTitle = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.format_line_spacing_rounded),
+        const Padding(
+          padding: EdgeInsets.all(2.0),
+          child: Icon(Icons.format_line_spacing_rounded),
+        ),
         Text(widget.title)
       ],
     );
@@ -75,16 +119,24 @@ class _MyHomePageState extends State<MyHomePage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-
     return Scaffold(
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: appBarTitle,
       ),
-      body: Column(
-        children: wrapName2Text(_studentContainer.getAllNames()),
-      ),
+      // body: Column(
+      //   children: wrapName2Text(_studentContainer.getAllNames()),
+      // ),
+      body: ListView(children: [
+        const Text(
+          'Current Queue:',
+          style: TextStyle(fontSize: 32),
+        ),
+        Column(
+          children: _queue,
+        )
+      ]),
       floatingActionButton: IconButton(
         icon: const Icon(Icons.add),
         onPressed: () {
