@@ -39,6 +39,7 @@ dependencies:
   dio: ^5.0.1
   msix: ^3.5.1
   provider: ^6.0.5
+  dartzmq: ^1.0.0-dev.15
 
 dev_dependencies:
   flutter_test:
