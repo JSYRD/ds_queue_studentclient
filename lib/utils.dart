@@ -1,9 +1,5 @@
-import 'dart:convert';
-import 'dart:io';
+import 'dart:async';
 import 'package:dio/dio.dart';
-import 'package:ds_queue_studentclient/config.dart';
-import 'package:flutter/foundation.dart';
-import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:dartzmq/dartzmq.dart';
 
@@ -33,15 +29,32 @@ class StudentContainer {
   }
 }
 
+class ZConnection {
+  late final ZSocket socket;
+  late final StreamSubscription subscription;
+}
+
 class ZMQHelper {
-  static void getUpdate() {
-    final ZContext context = ZContext();
-    final ZSocket socket = context.createSocket(SocketType.sub);
-    socket.connect(Config.url);
-    socket.subscribe("");
-    socket.messages.listen((event) {
-      print(event.toString());
-    });
+  static final ZContext context = ZContext();
+
+  List<ZConnection> connections = [];
+
+  void subscribe(
+      String url, String topic, void Function(ZMessage event) onUpdate) {
+    ZConnection newConnection = ZConnection();
+    newConnection.socket = context.createSocket(SocketType.sub);
+    newConnection.socket.connect(url);
+    newConnection.socket.subscribe(topic);
+    newConnection.subscription = newConnection.socket.messages.listen(onUpdate);
+    connections.add(newConnection);
+  }
+
+  void dispose() {
+    for (var connection in connections) {
+      connection.subscription.cancel();
+      connection.socket.close();
+    }
+    context.stop();
   }
 }
 
