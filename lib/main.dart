@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dartzmq/dartzmq.dart';
 import 'package:ds_queue_studentclient/config.dart';
 import 'package:ds_queue_studentclient/listinfo.dart';
 import 'package:flutter/material.dart';
@@ -37,8 +38,10 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   List<ListInfo> _queue = [];
   List<ListInfo> _supervisors = [];
-  ZMQHelper zmqHelper = ZMQHelper();
   final TextEditingController _nameController = TextEditingController();
+
+  late ZSocket enterQueueSocket;
+  late ZMonitor enterQueueMonitor;
 
   List<Text> wrapName2Text(List<String> names) {
     List<Text> ret = [];
@@ -49,8 +52,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void subscribeQueueStatus() {
-    zmqHelper.subscribe(
-      Config.url,
+    ZMQHelper.subscribe(
+      ZMQHelper.getNewSocket(Config.listenUrl, SocketType.sub),
+      Config.listenUrl,
       "queue",
       (event) {
         var queue = json.decode(utf8.decode(event.last.payload));
@@ -69,8 +73,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void subscribeSupervisorStatus() {
-    zmqHelper.subscribe(
-      Config.url,
+    ZMQHelper.subscribe(
+      ZMQHelper.getNewSocket(Config.listenUrl, SocketType.sub),
+      Config.listenUrl,
       "supervisors",
       (event) {
         var supervisors = json.decode(utf8.decode(event.last.payload));
@@ -90,16 +95,38 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  void enterQueue() {
+    enterQueueSocket.send(utf8.encode(json.encode({
+      "enterQueue": true,
+      "name": _nameController.text,
+      "clientId": "${ZMQHelper.context.hashCode}"
+    })));
+    enterQueueSocket.messages.listen((event) {
+      for (var element in event) {
+        print(utf8.decode(element.payload));
+      }
+    });
+  }
+
   @override
   void initState() {
     subscribeQueueStatus();
     subscribeSupervisorStatus();
+
+    enterQueueSocket = ZMQHelper.getNewSocket(Config.replyUrl, SocketType.req);
+    enterQueueMonitor =
+        ZMonitor(context: ZMQHelper.context, socket: enterQueueSocket);
+    enterQueueMonitor.events.listen((event) {
+      print(event.event);
+      print(event.value);
+    });
+
     super.initState();
   }
 
   @override
   void dispose() {
-    zmqHelper.dispose();
+    ZMQHelper.dispose();
     super.dispose();
   }
 
@@ -161,7 +188,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         padding: EdgeInsets.only(left: 20.0, top: 20.0),
                         child: Text(
                           'Current Queue:',
-                          style: TextStyle(fontSize: 32),
+                          style: TextStyle(fontSize: 28),
                         ),
                       ),
                       Column(
@@ -181,7 +208,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           padding: EdgeInsets.only(left: 20.0, top: 20.0),
                           child: Text(
                             'Current Supervisors:',
-                            style: TextStyle(fontSize: 32),
+                            style: TextStyle(fontSize: 28),
                           ),
                         ),
                         Column(
@@ -229,7 +256,9 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     TextButton(
                       onPressed: () {
-                        if (_nameController.text.isNotEmpty) {}
+                        if (_nameController.text.isNotEmpty) {
+                          enterQueue();
+                        }
                       },
                       child: const Text('Enter Queue'),
                     ),

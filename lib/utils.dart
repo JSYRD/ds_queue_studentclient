@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 import 'package:dartzmq/dartzmq.dart';
@@ -29,30 +30,45 @@ class StudentContainer {
   }
 }
 
-class ZConnection {
-  late final ZSocket socket;
-  late final StreamSubscription subscription;
-}
+// class ZConnection {
+//   late final ZSocket socket;
+//   late final StreamSubscription subscription;
+//   void destroy() {
+//     subscription.cancel();
+//     socket.close();
+//   }
+// }
 
 class ZMQHelper {
   static final ZContext context = ZContext();
 
-  List<ZConnection> connections = [];
+  static List<ZSocket> sockets = [];
+  static ZSocket getNewSocket(String url, SocketType type) {
+    ZSocket ret = context.createSocket(type);
+    ret.connect(url);
+    sockets.add(ret); // NOTE: manage ALL sockets.
 
-  void subscribe(
-      String url, String topic, void Function(ZMessage event) onUpdate) {
-    ZConnection newConnection = ZConnection();
-    newConnection.socket = context.createSocket(SocketType.sub);
-    newConnection.socket.connect(url);
-    newConnection.socket.subscribe(topic);
-    newConnection.subscription = newConnection.socket.messages.listen(onUpdate);
-    connections.add(newConnection);
+    return ret;
   }
 
-  void dispose() {
-    for (var connection in connections) {
-      connection.subscription.cancel();
-      connection.socket.close();
+  static void subscribe(ZSocket socket, String url, String topic,
+      void Function(ZMessage event) onUpdate) {
+    socket.subscribe(topic);
+    socket.messages.listen(onUpdate);
+  }
+
+  // static void send(ZSocket socket, Map<String, dynamic> message) {
+  //   socket.send(utf8.encode(json.encode(message)));
+  // }
+
+  // static StreamSubscription receive(
+  //     ZSocket socket, void Function(ZMessage event) onData) {
+  //   return socket.messages.listen(onData);
+  // }
+
+  static void dispose() {
+    for (var socket in sockets) {
+      socket.close();
     }
     context.stop();
   }
