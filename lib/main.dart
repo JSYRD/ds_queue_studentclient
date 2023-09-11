@@ -38,7 +38,11 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   List<ListInfo> _queue = [];
   List<ListInfo> _supervisors = [];
+
   final TextEditingController _nameController = TextEditingController();
+  final ScrollController _messageController = ScrollController();
+
+  List<String> _log = [];
 
   late ZSocket enterQueueSocket;
   late ZMonitor enterQueueMonitor;
@@ -103,7 +107,7 @@ class _MyHomePageState extends State<MyHomePage> {
     })));
     enterQueueSocket.messages.listen((event) {
       for (var element in event) {
-        print(utf8.decode(element.payload));
+        log(utf8.decode(element.payload));
       }
     });
   }
@@ -117,8 +121,8 @@ class _MyHomePageState extends State<MyHomePage> {
     enterQueueMonitor =
         ZMonitor(context: ZMQHelper.context, socket: enterQueueSocket);
     enterQueueMonitor.events.listen((event) {
-      print(event.event);
-      print(event.value);
+      log(event.event.toString());
+      log(event.value.toString());
     });
 
     super.initState();
@@ -130,9 +134,55 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
+  void clearLog() {
+    setState(() {
+      _log.clear();
+    });
+  }
+
+  static String _fourDigits(int n) {
+    int absN = n.abs();
+    String sign = n < 0 ? "-" : "";
+    if (absN >= 1000) return "$n";
+    if (absN >= 100) return "${sign}0$absN";
+    if (absN >= 10) return "${sign}00$absN";
+    return "${sign}000$absN";
+  }
+
+  static String _twoDigits(int n) {
+    if (n >= 10) return "${n}";
+    return "0${n}";
+  }
+
+  void log(Object? object, {Object? sender}) {
+    var now = DateTime.now();
+    String y = _fourDigits(now.year);
+    String m = _twoDigits(now.month);
+    String d = _twoDigits(now.day);
+    String h = _twoDigits(now.hour);
+    String min = _twoDigits(now.minute);
+    String sec = _twoDigits(now.second);
+    var currentTime = "[$y-$m-$d $h:$min:$sec]";
+    var newMessage = "$currentTime ${sender ?? 'annoymous'}: $object";
+    List<String> newlog = _log.cast();
+    newlog.add(newMessage);
+    setState(() {
+      _log = newlog;
+    });
+    Future.delayed(const Duration(milliseconds: 20), () {
+      _messageController.jumpTo(_messageController.position.maxScrollExtent);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: ElevatedButton(
+        child: const Icon(Icons.bug_report),
+        onPressed: () {
+          log("Debug", sender: "debugger");
+        },
+      ),
       drawer: const Drawer(
         child: Column(
           children: [
@@ -160,6 +210,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
       body: Builder(
+        // Top app bar
         builder: (context) => Column(
           children: [
             Padding(
@@ -178,6 +229,7 @@ class _MyHomePageState extends State<MyHomePage> {
             const Divider(
               height: 1.0,
             ),
+            //Queues
             Expanded(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -228,44 +280,134 @@ class _MyHomePageState extends State<MyHomePage> {
               endIndent: 20,
               thickness: 1,
             ),
-            Expanded(
-              flex: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Name:",
-                      style: TextStyle(fontSize: 24.0),
-                    ),
-                    Padding(
+            //bottom
+            Container(
+              height: 150,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: Padding(
                       padding: const EdgeInsets.all(8.0),
-                      child: TextField(
-                          controller: _nameController,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.all(Radius.circular(5.0)),
-                                borderSide:
-                                    BorderSide(color: Colors.lightBlue)),
-                            labelText: 'Name',
-                            hintText: 'Enter Your Name',
-                          )),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Name:",
+                            style: TextStyle(fontSize: 24.0),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: TextField(
+                                controller: _nameController,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.all(
+                                          Radius.circular(5.0)),
+                                      borderSide:
+                                          BorderSide(color: Colors.lightBlue)),
+                                  labelText: 'Name',
+                                  hintText: 'Enter Your Name',
+                                )),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              if (_nameController.text.isNotEmpty) {
+                                enterQueue();
+                              }
+                            },
+                            child: const Text('Enter Queue'),
+                          ),
+                        ],
+                      ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        if (_nameController.text.isNotEmpty) {
-                          enterQueue();
-                        }
-                      },
-                      child: const Text('Enter Queue'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const VerticalDivider(
+                    width: 1,
+                  ),
+                  Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8.0, top: 8.0),
+                            child: Text(
+                              "Messages",
+                              style: TextStyle(
+                                  fontSize: 16.0,
+                                  decoration: TextDecoration.underline,
+                                  decorationThickness: 1),
+                            ),
+                          ),
+                          Expanded(
+                              flex: 1,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: ListView(
+                                  controller: _messageController,
+                                  shrinkWrap: true,
+                                  // reverse: true,
+                                  children: wrapName2Text(_log),
+                                ),
+                              ))
+                        ],
+                      ))
+                ],
               ),
             ),
+            // Expanded(
+            //     flex: 0,
+            //     child: Row(
+            //       children: [
+            //         Expanded(
+            //           flex: 1,
+            //           child: Padding(
+            //             padding: const EdgeInsets.all(8.0),
+            //             child: Column(
+            //               crossAxisAlignment: CrossAxisAlignment.start,
+            //               mainAxisAlignment: MainAxisAlignment.start,
+            //               children: [
+            //                 const Text(
+            //                   "Name:",
+            //                   style: TextStyle(fontSize: 24.0),
+            //                 ),
+            //                 Padding(
+            //                   padding: const EdgeInsets.all(8.0),
+            //                   child: TextField(
+            //                       controller: _nameController,
+            //                       decoration: const InputDecoration(
+            //                         border: OutlineInputBorder(
+            //                             borderRadius: BorderRadius.all(
+            //                                 Radius.circular(5.0)),
+            //                             borderSide: BorderSide(
+            //                                 color: Colors.lightBlue)),
+            //                         labelText: 'Name',
+            //                         hintText: 'Enter Your Name',
+            //                       )),
+            //                 ),
+            //                 TextButton(
+            //                   onPressed: () {
+            //                     if (_nameController.text.isNotEmpty) {
+            //                       enterQueue();
+            //                     }
+            //                   },
+            //                   child: const Text('Enter Queue'),
+            //                 ),
+            //               ],
+            //             ),
+            //           ),
+            //         ),
+            //         Expanded(
+            //           flex: 2,
+            //           child: ListView(
+            //             shrinkWrap: true,
+            //             children: wrapName2Text(_log),
+            //           ),
+            //         )
+            //       ],
+            //     ))
           ],
         ),
       ),
