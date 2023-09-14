@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 import 'package:dartzmq/dartzmq.dart';
@@ -43,8 +42,9 @@ class ZMQHelper {
   static final ZContext context = ZContext();
 
   static List<ZSocket> sockets = [];
-  static ZSocket getNewSocket(String url, SocketType type) {
-    ZSocket ret = context.createSocket(type);
+  static MonitoredZSocket getNewSocket(String url, SocketType type) {
+    // ZSocket ret = context.createSocket(type);
+    var ret = context.createMonitoredSocket(type);
     ret.connect(url);
     sockets.add(ret); // NOTE: manage ALL sockets.
 
