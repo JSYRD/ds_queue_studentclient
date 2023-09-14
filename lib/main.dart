@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:dartzmq/dartzmq.dart';
 import 'package:ds_queue_studentclient/config.dart';
 import 'package:ds_queue_studentclient/listinfo.dart';
@@ -44,7 +45,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   List<String> _log = [];
 
-  late ZSocket enterQueueSocket;
+  late MonitoredZSocket enterQueueSocket;
   late ZMonitor enterQueueMonitor;
 
   List<Text> wrapName2Text(List<String> names) {
@@ -64,6 +65,10 @@ class _MyHomePageState extends State<MyHomePage> {
         var queue = json.decode(utf8.decode(event.last.payload));
         List<ListInfo> newqueue = [];
         for (var element in queue) {
+          if (element == null) {
+            log(queue);
+            continue;
+          }
           newqueue.add(ListInfo(
               title: element['name'], data: "ticket:${element['ticket']}"));
         }
@@ -85,6 +90,10 @@ class _MyHomePageState extends State<MyHomePage> {
         var supervisors = json.decode(utf8.decode(event.last.payload));
         List<ListInfo> newqueue = [];
         for (var element in supervisors) {
+          if (element == null) {
+            log(supervisors);
+            continue;
+          }
           newqueue.add(ListInfo(
               title: element['name'],
               data:
@@ -100,16 +109,14 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void enterQueue() {
-    enterQueueSocket.send(utf8.encode(json.encode({
+    var newMessage = ZMessage();
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
       "enterQueue": true,
       "name": _nameController.text,
       "clientId": "${ZMQHelper.context.hashCode}"
-    })));
-    enterQueueSocket.messages.listen((event) {
-      for (var element in event) {
-        log(utf8.decode(element.payload));
-      }
-    });
+    })))));
+    enterQueueSocket.sendMessage(newMessage);
   }
 
   @override
@@ -117,13 +124,16 @@ class _MyHomePageState extends State<MyHomePage> {
     subscribeQueueStatus();
     subscribeSupervisorStatus();
 
-    enterQueueSocket = ZMQHelper.getNewSocket(Config.replyUrl, SocketType.req);
-    enterQueueMonitor =
-        ZMonitor(context: ZMQHelper.context, socket: enterQueueSocket);
-    enterQueueMonitor.events.listen((event) {
-      log(event.event.toString());
-      log(event.value.toString());
-    });
+    enterQueueSocket =
+        ZMQHelper.getNewSocket(Config.replyUrl, SocketType.dealer);
+    enterQueueSocket.messages.listen((event) {
+      for (var element in event) {
+        if (element.payload.isEmpty) continue;
+        log(utf8.decode(element.payload), sender: "reply");
+      }
+    }, onDone: () {
+      log("Done!", sender: "listen:onDone");
+    }, cancelOnError: true);
 
     super.initState();
   }
@@ -357,57 +367,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               ),
             ),
-            // Expanded(
-            //     flex: 0,
-            //     child: Row(
-            //       children: [
-            //         Expanded(
-            //           flex: 1,
-            //           child: Padding(
-            //             padding: const EdgeInsets.all(8.0),
-            //             child: Column(
-            //               crossAxisAlignment: CrossAxisAlignment.start,
-            //               mainAxisAlignment: MainAxisAlignment.start,
-            //               children: [
-            //                 const Text(
-            //                   "Name:",
-            //                   style: TextStyle(fontSize: 24.0),
-            //                 ),
-            //                 Padding(
-            //                   padding: const EdgeInsets.all(8.0),
-            //                   child: TextField(
-            //                       controller: _nameController,
-            //                       decoration: const InputDecoration(
-            //                         border: OutlineInputBorder(
-            //                             borderRadius: BorderRadius.all(
-            //                                 Radius.circular(5.0)),
-            //                             borderSide: BorderSide(
-            //                                 color: Colors.lightBlue)),
-            //                         labelText: 'Name',
-            //                         hintText: 'Enter Your Name',
-            //                       )),
-            //                 ),
-            //                 TextButton(
-            //                   onPressed: () {
-            //                     if (_nameController.text.isNotEmpty) {
-            //                       enterQueue();
-            //                     }
-            //                   },
-            //                   child: const Text('Enter Queue'),
-            //                 ),
-            //               ],
-            //             ),
-            //           ),
-            //         ),
-            //         Expanded(
-            //           flex: 2,
-            //           child: ListView(
-            //             shrinkWrap: true,
-            //             children: wrapName2Text(_log),
-            //           ),
-            //         )
-            //       ],
-            //     ))
           ],
         ),
       ),
