@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dartzmq/dartzmq.dart';
@@ -47,6 +48,23 @@ class _MyHomePageState extends State<MyHomePage> {
 
   late MonitoredZSocket enterQueueSocket;
   late ZMonitor enterQueueMonitor;
+  late MonitoredZSocket heartbeatSocket;
+
+  late final Timer heartbeater;
+
+  String? _currentUser;
+
+  void _heartbeat() {
+    if (_currentUser != null) {
+      var newMessage = ZMessage();
+      newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+      newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
+        "name": _currentUser,
+        "clientId": "${ZMQHelper.context.hashCode}"
+      })))));
+      heartbeatSocket.sendMessage(newMessage);
+    }
+  }
 
   List<Text> wrapName2Text(List<String> names) {
     List<Text> ret = [];
@@ -110,13 +128,14 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void enterQueue() {
     var newMessage = ZMessage();
-    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+    newMessage.add(ZFrame(Uint8List(0)));
     newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
       "enterQueue": true,
       "name": _nameController.text,
       "clientId": "${ZMQHelper.context.hashCode}"
     })))));
     enterQueueSocket.sendMessage(newMessage);
+    _nameController.clear();
   }
 
   @override
@@ -129,12 +148,30 @@ class _MyHomePageState extends State<MyHomePage> {
     enterQueueSocket.messages.listen((event) {
       for (var element in event) {
         if (element.payload.isEmpty) continue;
-        log(utf8.decode(element.payload), sender: "reply");
+        try {
+          Map<String, dynamic> reply = jsonDecode(utf8.decode(element.payload));
+          if (reply.containsKey("name")) _currentUser = reply["name"];
+          log(utf8.decode(element.payload), sender: "reply");
+        } catch (e) {
+          log(e, sender: "ERROR");
+        }
       }
     }, onDone: () {
       log("Done!", sender: "listen:onDone");
     }, cancelOnError: true);
 
+    heartbeatSocket =
+        ZMQHelper.getNewSocket(Config.replyUrl, SocketType.dealer);
+    heartbeatSocket.messages.listen((event) {
+      for (var element in event) {
+        if (element.payload.isEmpty) continue;
+        print(element.payload);
+        // log(utf8.decode(element.payload), sender: "DEBUG");
+        // assert(utf8.decode(element.payload).toString() == );
+      }
+    });
+    heartbeater =
+        Timer.periodic(const Duration(seconds: 1), ((timer) => _heartbeat()));
     super.initState();
   }
 
