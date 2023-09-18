@@ -49,10 +49,14 @@ class _MyHomePageState extends State<MyHomePage> {
   late MonitoredZSocket enterQueueSocket;
   late ZMonitor enterQueueMonitor;
   late MonitoredZSocket heartbeatSocket;
+  late MonitoredZSocket messageSocket;
 
   late final Timer heartbeater;
 
+  final SERVERSTATE _serverstate = SERVERSTATE.unknown;
+
   String? _currentUser;
+  final bool _subscribingMessage = false;
 
   void _heartbeat() {
     if (_currentUser != null) {
@@ -126,6 +130,19 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  void subscribeMessages() {
+    if (_currentUser != null) {
+      ZMQHelper.subscribe(
+          messageSocket, Config.listenUrl, "$_currentUser", (event) {});
+    } else {
+      log("No Current User.", sender: "ERROR:");
+    }
+  }
+
+  void unsubscribeMessages(ZSocket socket) {
+    if (_subscribingMessage) {}
+  }
+
   void enterQueue() {
     var newMessage = ZMessage();
     newMessage.add(ZFrame(Uint8List(0)));
@@ -135,7 +152,7 @@ class _MyHomePageState extends State<MyHomePage> {
       "clientId": "${ZMQHelper.context.hashCode}"
     })))));
     enterQueueSocket.sendMessage(newMessage);
-    _nameController.clear();
+    // _nameController.clear();
   }
 
   @override
@@ -150,7 +167,10 @@ class _MyHomePageState extends State<MyHomePage> {
         if (element.payload.isEmpty) continue;
         try {
           Map<String, dynamic> reply = jsonDecode(utf8.decode(element.payload));
-          if (reply.containsKey("name")) _currentUser = reply["name"];
+          if (reply.containsKey("name")) {
+            _currentUser = reply["name"];
+            subscribeMessages();
+          }
           log(utf8.decode(element.payload), sender: "reply");
         } catch (e) {
           log(e, sender: "ERROR");
@@ -165,13 +185,14 @@ class _MyHomePageState extends State<MyHomePage> {
     heartbeatSocket.messages.listen((event) {
       for (var element in event) {
         if (element.payload.isEmpty) continue;
-        print(element.payload);
         // log(utf8.decode(element.payload), sender: "DEBUG");
         // assert(utf8.decode(element.payload).toString() == );
       }
     });
     heartbeater =
         Timer.periodic(const Duration(seconds: 1), ((timer) => _heartbeat()));
+
+    messageSocket = ZMQHelper.getNewSocket(Config.listenUrl, SocketType.sub);
     super.initState();
   }
 
@@ -269,7 +290,27 @@ class _MyHomePageState extends State<MyHomePage> {
                       Scaffold.of(context).openDrawer();
                     },
                     child: const Icon(Icons.menu_open),
-                  )
+                  ),
+                  const Text(
+                    "Current State:",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextButton(
+                    onPressed: () {},
+                    onHover: (value) {},
+                    child: Icon((() {
+                      switch (_serverstate) {
+                        case SERVERSTATE.up:
+                          return Icons.check;
+                        case SERVERSTATE.down:
+                          return Icons.clear;
+                        case SERVERSTATE.heartbeating:
+                          return Icons.monitor_heart;
+                        default:
+                          return Icons.question_mark;
+                      }
+                    })()),
+                  ),
                 ],
               ),
             ),

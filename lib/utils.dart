@@ -57,6 +57,10 @@ class ZMQHelper {
     socket.messages.listen(onUpdate);
   }
 
+  static void unsubscribe(ZSocket socket, String topic) {
+    socket.unsubscribe(topic);
+  }
+
   // static void send(ZSocket socket, Map<String, dynamic> message) {
   //   socket.send(utf8.encode(json.encode(message)));
   // }
@@ -108,3 +112,5 @@ class NetHelper {
         header: {'content-type': 'application/json'}, body: body, isPost: true);
   }
 }
+
+enum SERVERSTATE { up, down, heartbeating, unknown }
