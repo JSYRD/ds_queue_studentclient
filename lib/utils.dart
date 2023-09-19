@@ -1,116 +1,94 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
-import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:ds_queue_studentclient/config.dart';
 import 'package:dartzmq/dartzmq.dart';
 
-class Student {
-  Student({required this.name, required this.id, required this.number});
-  String name;
-  int id;
-  int number;
-}
+class ServerConnecter {
+  final ZContext context = ZContext();
 
-class StudentContainer {
-  final List<Student> _container = [];
-  StudentContainer() {
-    _container.add(Student(name: "Leon", id: 114514, number: 1919810));
+  String? currentUser;
+
+  final SERVERSTATE serverState = SERVERSTATE.unknown;
+
+  late final MonitoredZSocket repSocket;
+  late final MonitoredZSocket listenSocket;
+
+  late final Timer heartbeater;
+
+  ServerConnecter() {
+    repSocket = context.createMonitoredSocket(SocketType.dealer);
+    listenSocket = context.createMonitoredSocket(SocketType.sub);
+    connect();
   }
 
-  List<String> getAllNames() {
-    List<String> ret = [];
-    for (var student in _container) {
-      ret.add("Name:${student.name} Id:${student.id} No.:${student.number}");
+  void unsubscribe(String topic) {
+    listenSocket.subscribe(topic);
+  }
+
+  void subscribe(String topic) {
+    listenSocket.subscribe(topic);
+  }
+
+  void _heartbeat() {
+    if (currentUser != null) {
+      var newMessage = ZMessage();
+      newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+      newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json
+          .encode({"name": currentUser, "clientId": "${context.hashCode}"})))));
+      repSocket.sendMessage(newMessage);
     }
-    return ret;
   }
 
-  void add(Student student) {
-    _container.add(student);
-  }
-}
-
-// class ZConnection {
-//   late final ZSocket socket;
-//   late final StreamSubscription subscription;
-//   void destroy() {
-//     subscription.cancel();
-//     socket.close();
-//   }
-// }
-
-class ZMQHelper {
-  static final ZContext context = ZContext();
-
-  static List<ZSocket> sockets = [];
-  static MonitoredZSocket getNewSocket(String url, SocketType type) {
-    // ZSocket ret = context.createSocket(type);
-    var ret = context.createMonitoredSocket(type);
-    ret.connect(url);
-    sockets.add(ret); // NOTE: manage ALL sockets.
-
-    return ret;
+  void enterQueue(String name) {
+    var newMessage = ZMessage();
+    newMessage.add(ZFrame(Uint8List(0)));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
+      "enterQueue": true,
+      "name": name,
+      "clientId": "${context.hashCode}"
+    })))));
+    repSocket.sendMessage(newMessage);
   }
 
-  static void subscribe(ZSocket socket, String url, String topic,
-      void Function(ZMessage event) onUpdate) {
-    socket.subscribe(topic);
-    socket.messages.listen(onUpdate);
-  }
+  void connect() {
+    repSocket.connect(Config.replyUrl);
 
-  static void unsubscribe(ZSocket socket, String topic) {
-    socket.unsubscribe(topic);
-  }
+    repSocket.messages.listen((event) {
+      for (var element in event) {
+        if (element.payload.isEmpty) continue;
+        Map<String, dynamic> reply = jsonDecode(utf8.decode(element.payload));
+        // check if it is queue's ticket
+        if (reply.containsKey("name")) {
+          if (currentUser != null) unsubscribe(currentUser!);
+          currentUser = reply["name"];
+          //TODO: notify main page to update currentUser
+          subscribe(currentUser!);
+        } else if (reply.containsKey("error")) {
+          print("error");
+          //TODO: implement log
+        }
+      }
+    });
 
-  // static void send(ZSocket socket, Map<String, dynamic> message) {
-  //   socket.send(utf8.encode(json.encode(message)));
-  // }
+    heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _heartbeat();
+    });
 
-  // static StreamSubscription receive(
-  //     ZSocket socket, void Function(ZMessage event) onData) {
-  //   return socket.messages.listen(onData);
-  // }
-
-  static void dispose() {
-    for (var socket in sockets) {
-      socket.close();
-    }
-    context.stop();
+    listenSocket.connect(Config.listenUrl);
+    listenSocket.subscribe("queue");
+    listenSocket.subscribe("supervisors");
+    listenSocket.messages.listen((event) {
+      var topic = utf8.decode(event.first.payload);
+      if (topic == "queue") {
+        print(utf8.decode(event.last.payload));
+        //TODO: update queue
+      } else if (topic == "supervisors") {
+        print(utf8.decode(event.last.payload));
+        //TODO: update supervisors
+      }
+    });
   }
 }
 
-class NetHelper {
-  String? defaultUrl;
-  NetHelper({this.defaultUrl});
-  Future<Response> _request(String? url,
-      {Map<String, String>? header,
-      Map<String, String>? body,
-      bool isPost = false}) async {
-    var client = http.Client();
-    var uri = Uri.parse("tcp://$url");
-    Future<Response> response;
-    if (!isPost) {
-      response = client
-          .get(uri, headers: header)
-          .timeout(const Duration(seconds: 3)) as Future<Response>;
-    } else {
-      response = client
-          .post(uri, headers: header, body: body)
-          .timeout(const Duration(seconds: 3)) as Future<Response>;
-    }
-    return response;
-  }
-
-  Future<Response> get(String? url) async {
-    return _request(
-      url,
-      header: {'content-type': 'application/json'},
-    );
-  }
-
-  Future<Response> post(String? url, Map<String, String>? body) async {
-    return _request(url,
-        header: {'content-type': 'application/json'}, body: body, isPost: true);
-  }
-}
-
-enum SERVERSTATE { up, down, heartbeating, unknown }
+enum SERVERSTATE { up, down, unknown }

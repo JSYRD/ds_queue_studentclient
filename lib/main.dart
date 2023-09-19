@@ -1,8 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
-import 'package:dartzmq/dartzmq.dart';
-import 'package:ds_queue_studentclient/config.dart';
 import 'package:ds_queue_studentclient/listinfo.dart';
 import 'package:flutter/material.dart';
 import 'package:ds_queue_studentclient/utils.dart';
@@ -44,31 +40,9 @@ class _MyHomePageState extends State<MyHomePage> {
   final TextEditingController _nameController = TextEditingController();
   final ScrollController _messageController = ScrollController();
 
+  final ServerConnecter sc = ServerConnecter();
+
   List<String> _log = [];
-
-  late MonitoredZSocket enterQueueSocket;
-  late ZMonitor enterQueueMonitor;
-  late MonitoredZSocket heartbeatSocket;
-  late MonitoredZSocket messageSocket;
-
-  late final Timer heartbeater;
-
-  final SERVERSTATE _serverstate = SERVERSTATE.unknown;
-
-  String? _currentUser;
-  final bool _subscribingMessage = false;
-
-  void _heartbeat() {
-    if (_currentUser != null) {
-      var newMessage = ZMessage();
-      newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
-      newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
-        "name": _currentUser,
-        "clientId": "${ZMQHelper.context.hashCode}"
-      })))));
-      heartbeatSocket.sendMessage(newMessage);
-    }
-  }
 
   List<Text> wrapName2Text(List<String> names) {
     List<Text> ret = [];
@@ -78,128 +52,8 @@ class _MyHomePageState extends State<MyHomePage> {
     return ret;
   }
 
-  void subscribeQueueStatus() {
-    ZMQHelper.subscribe(
-      ZMQHelper.getNewSocket(Config.listenUrl, SocketType.sub),
-      Config.listenUrl,
-      "queue",
-      (event) {
-        var queue = json.decode(utf8.decode(event.last.payload));
-        List<ListInfo> newqueue = [];
-        for (var element in queue) {
-          if (element == null) {
-            log(queue);
-            continue;
-          }
-          newqueue.add(ListInfo(
-              title: element['name'], data: "ticket:${element['ticket']}"));
-        }
-        setState(
-          () {
-            _queue = newqueue;
-          },
-        );
-      },
-    );
-  }
-
-  void subscribeSupervisorStatus() {
-    ZMQHelper.subscribe(
-      ZMQHelper.getNewSocket(Config.listenUrl, SocketType.sub),
-      Config.listenUrl,
-      "supervisors",
-      (event) {
-        var supervisors = json.decode(utf8.decode(event.last.payload));
-        List<ListInfo> newqueue = [];
-        for (var element in supervisors) {
-          if (element == null) {
-            log(supervisors);
-            continue;
-          }
-          newqueue.add(ListInfo(
-              title: element['name'],
-              data:
-                  "status:${element['status']}    ${element['client'] == 'undefined' ? 'No Client.' : "Client: ${element['client']['name']} Ticket: ${element['client']['ticket']} "}"));
-        }
-        setState(
-          () {
-            _supervisors = newqueue;
-          },
-        );
-      },
-    );
-  }
-
-  void subscribeMessages() {
-    if (_currentUser != null) {
-      ZMQHelper.subscribe(
-          messageSocket, Config.listenUrl, "$_currentUser", (event) {});
-    } else {
-      log("No Current User.", sender: "ERROR:");
-    }
-  }
-
-  void unsubscribeMessages(ZSocket socket) {
-    if (_subscribingMessage) {}
-  }
-
   void enterQueue() {
-    var newMessage = ZMessage();
-    newMessage.add(ZFrame(Uint8List(0)));
-    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
-      "enterQueue": true,
-      "name": _nameController.text,
-      "clientId": "${ZMQHelper.context.hashCode}"
-    })))));
-    enterQueueSocket.sendMessage(newMessage);
-    // _nameController.clear();
-  }
-
-  @override
-  void initState() {
-    subscribeQueueStatus();
-    subscribeSupervisorStatus();
-
-    enterQueueSocket =
-        ZMQHelper.getNewSocket(Config.replyUrl, SocketType.dealer);
-    enterQueueSocket.messages.listen((event) {
-      for (var element in event) {
-        if (element.payload.isEmpty) continue;
-        try {
-          Map<String, dynamic> reply = jsonDecode(utf8.decode(element.payload));
-          if (reply.containsKey("name")) {
-            _currentUser = reply["name"];
-            subscribeMessages();
-          }
-          log(utf8.decode(element.payload), sender: "reply");
-        } catch (e) {
-          log(e, sender: "ERROR");
-        }
-      }
-    }, onDone: () {
-      log("Done!", sender: "listen:onDone");
-    }, cancelOnError: true);
-
-    heartbeatSocket =
-        ZMQHelper.getNewSocket(Config.replyUrl, SocketType.dealer);
-    heartbeatSocket.messages.listen((event) {
-      for (var element in event) {
-        if (element.payload.isEmpty) continue;
-        // log(utf8.decode(element.payload), sender: "DEBUG");
-        // assert(utf8.decode(element.payload).toString() == );
-      }
-    });
-    heartbeater =
-        Timer.periodic(const Duration(seconds: 1), ((timer) => _heartbeat()));
-
-    messageSocket = ZMQHelper.getNewSocket(Config.listenUrl, SocketType.sub);
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    ZMQHelper.dispose();
-    super.dispose();
+    sc.enterQueue(_nameController.text);
   }
 
   void clearLog() {
@@ -218,8 +72,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   static String _twoDigits(int n) {
-    if (n >= 10) return "${n}";
-    return "0${n}";
+    if (n >= 10) return "$n";
+    return "0$n";
   }
 
   void log(Object? object, {Object? sender}) {
@@ -299,13 +153,11 @@ class _MyHomePageState extends State<MyHomePage> {
                     onPressed: () {},
                     onHover: (value) {},
                     child: Icon((() {
-                      switch (_serverstate) {
+                      switch (sc.serverState) {
                         case SERVERSTATE.up:
                           return Icons.check;
                         case SERVERSTATE.down:
                           return Icons.clear;
-                        case SERVERSTATE.heartbeating:
-                          return Icons.monitor_heart;
                         default:
                           return Icons.question_mark;
                       }
@@ -369,7 +221,7 @@ class _MyHomePageState extends State<MyHomePage> {
               thickness: 1,
             ),
             //bottom
-            Container(
+            SizedBox(
               height: 150,
               child: Row(
                 children: [
