@@ -52,11 +52,18 @@ class _MyHomePageState extends State<MyHomePage> {
     sc.enterQueue(_nameController.text);
   }
 
+  void showSnackBar(Widget content) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: content,
+      action: SnackBarAction(label: "Close", onPressed: () {}),
+    ));
+  }
+
   @override
   void initState() {
     msg = MyMessageController(
         stateSetter: setState, listViewController: _messageController);
-    sc = ServerConnecter(setState, msg);
+    sc = ServerConnecter(setState, msg, context);
     super.initState();
   }
 
@@ -66,7 +73,9 @@ class _MyHomePageState extends State<MyHomePage> {
       floatingActionButton: ElevatedButton(
         child: const Icon(Icons.bug_report),
         onPressed: () {
-          msg.log("Debug", sender: "debugger");
+          // msg.log("Debug", sender: "debugger");
+          // sc.reconnect();
+          showSnackBar(const Text("DEBUG"));
         },
       ),
       drawer: const Drawer(
@@ -100,7 +109,7 @@ class _MyHomePageState extends State<MyHomePage> {
         builder: (context) => Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
+              padding: const EdgeInsets.only(top: 15.0, bottom: 15.0),
               child: Row(
                 children: [
                   TextButton(
@@ -113,20 +122,53 @@ class _MyHomePageState extends State<MyHomePage> {
                     "Current State:",
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  TextButton(
-                    onPressed: () {},
-                    onHover: (value) {},
-                    child: Icon((() {
+                  Tooltip(
+                    message: (() {
                       switch (sc.serverState) {
+                        case SERVERSTATE.unknown:
+                          return "Unknown, tap to reconnect";
                         case SERVERSTATE.up:
-                          return Icons.check;
+                          return "Connected.";
                         case SERVERSTATE.down:
-                          return Icons.clear;
+                          return "Disconnected, tap to reconnect";
+                        case SERVERSTATE.retry:
+                          return "Retrying...";
                         default:
-                          return Icons.question_mark;
                       }
-                    })()),
-                  ),
+                    })(),
+                    child: TextButton(
+                      style: ButtonStyle(
+                        padding: MaterialStateProperty.all(
+                            const EdgeInsets.all(10.0)),
+                        minimumSize:
+                            MaterialStateProperty.all(const Size(20, 20)),
+                      ),
+                      onPressed: () {
+                        switch (sc.serverState) {
+                          case SERVERSTATE.unknown:
+                            sc.reconnect();
+                            break;
+                          case SERVERSTATE.down:
+                            sc.reconnect();
+                            break;
+                          default:
+                          // msg.log("UNKNOWN");
+                        }
+                      },
+                      child: Icon((() {
+                        switch (sc.serverState) {
+                          case SERVERSTATE.up:
+                            return Icons.check;
+                          case SERVERSTATE.down:
+                            return Icons.clear;
+                          case SERVERSTATE.retry:
+                            return Icons.more_horiz;
+                          default:
+                            return Icons.refresh;
+                        }
+                      })()),
+                    ),
+                  )
                 ],
               ),
             ),
