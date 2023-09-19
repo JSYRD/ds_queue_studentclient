@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:ds_queue_studentclient/config.dart';
 import 'package:dartzmq/dartzmq.dart';
+import 'package:ds_queue_studentclient/listinfo.dart';
 import 'package:flutter/material.dart';
 
 class ServerConnecter {
   final ZContext context = ZContext();
 
-  List<String> queue = [];
-  List<String> supervisors = [];
+  List<ListInfo> queue = [];
+  List<ListInfo> supervisors = [];
 
   String? currentUser;
 
@@ -88,12 +89,29 @@ class ServerConnecter {
     listenSocket.messages.listen((event) {
       var topic = utf8.decode(event.first.payload);
       if (topic == "queue") {
-        print(utf8.decode(event.last.payload));
-        setState(() {});
-        //TODO: update queue
+        var tqueue = json.decode(utf8.decode(event.last.payload));
+        List<ListInfo> newqueue = [];
+        for (var element in tqueue) {
+          if (element == null) continue;
+          newqueue.add(ListInfo(
+              title: element['name'], data: "ticket:${element['ticket']}"));
+        }
+        setState(() {
+          queue = newqueue;
+        });
       } else if (topic == "supervisors") {
-        print(utf8.decode(event.last.payload));
-        //TODO: update supervisors
+        var tsupervisors = json.decode(utf8.decode(event.last.payload));
+        List<ListInfo> newsupervisors = [];
+        for (var element in tsupervisors) {
+          if (element == null) continue;
+          newsupervisors.add(ListInfo(
+              title: element['name'],
+              data:
+                  "status:${element['status']}    ${element['client'] == 'undefined' ? 'No Client.' : "Client: ${element['client']['name']} Ticket: ${element['client']['ticket']} "}"));
+        }
+        setState(() {
+          supervisors = newsupervisors;
+        });
       }
     });
   }
