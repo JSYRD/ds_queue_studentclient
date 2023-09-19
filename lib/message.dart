@@ -58,8 +58,8 @@ class MyMessageController {
   }
 
   static String _twoDigits(int n) {
-    if (n >= 10) return "${n}";
-    return "0${n}";
+    if (n >= 10) return "$n";
+    return "0$n";
   }
 
   void log(Object? object, {Object? sender}) {
@@ -82,14 +82,3 @@ class MyMessageController {
     });
   }
 }
-
-// class Message extends ListView {
-
-
-//   Message({Key? key, required ScrollController controller, required this.logs})
-//       : super(
-//             key: key,
-//             controller: controller,
-//             shrinkWrap: true,
-//             children: wrapName2Text(logs));
-// }
