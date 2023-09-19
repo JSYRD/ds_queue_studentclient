@@ -15,23 +15,27 @@ class ServerConnecter {
 
   String? currentUser;
 
-  final SERVERSTATE serverState = SERVERSTATE.unknown;
+  SERVERSTATE serverState = SERVERSTATE.unknown;
 
   late final MonitoredZSocket repSocket;
   late final MonitoredZSocket listenSocket;
 
   late final Timer heartbeater;
 
+  late final Timer _timeoutHandler;
+
   late final StateSetter setState;
 
   late final MyMessageController logger;
 
-  ServerConnecter(StateSetter stateSetter, MyMessageController logger) {
+  late final BuildContext buildContext;
+  // late final void Function() ;
+
+  ServerConnecter(StateSetter stateSetter, this.logger, this.buildContext) {
     setState = stateSetter;
     repSocket = context.createMonitoredSocket(SocketType.dealer);
     listenSocket = context.createMonitoredSocket(SocketType.sub);
-    logger = logger;
-    connect();
+    _connect();
   }
 
   void unsubscribe(String topic) {
@@ -63,7 +67,38 @@ class ServerConnecter {
     repSocket.sendMessage(newMessage);
   }
 
-  void connect() {
+  void reconnect() {
+    repSocket.connect(Config.replyUrl);
+    listenSocket.connect(Config.listenUrl);
+  }
+
+  void _connect() {
+    repSocket.events.distinct().listen((event) {
+      switch (event.first) {
+        case ZEvent.HANDSHAKE_SUCCEEDED:
+          logger.log("Connected to server", sender: "Client");
+          setState(() {
+            serverState = SERVERSTATE.up;
+          });
+          break;
+        case ZEvent.CLOSED:
+          logger.log("Socket closed.", sender: "Client");
+          setState(() {
+            serverState = SERVERSTATE.down;
+          });
+        case ZEvent.CONNECT_RETRIED:
+          setState(() {
+            serverState = SERVERSTATE.retry;
+          });
+        default:
+          // setState(() {
+          //   serverState = SERVERSTATE.unknown;
+          // });
+          break;
+      }
+      // logger.log(event, sender: "ServerConnecter");
+    });
+
     repSocket.connect(Config.replyUrl);
 
     repSocket.messages.listen((event) {
@@ -73,12 +108,15 @@ class ServerConnecter {
         // check if it is queue's ticket
         if (reply.containsKey("name")) {
           if (currentUser != null) unsubscribe(currentUser!);
-          currentUser = reply["name"];
-          //TODO: notify main page to update currentUser
+          setState(() {
+            currentUser = reply["name"];
+          });
+          logger.log(
+              "Succeed entering queue, current user: $currentUser; ticket: ${reply['ticket']}",
+              sender: "Host");
           subscribe(currentUser!);
         } else if (reply.containsKey("error")) {
-          print("error");
-          //TODO: implement log
+          logger.log("ERROR CAUGHT", sender: "repSocket.message.listen");
         }
       }
     });
@@ -116,9 +154,17 @@ class ServerConnecter {
         setState(() {
           supervisors = newsupervisors;
         });
+      } else if (topic == currentUser) {
+        var userMessage = json.decode(utf8.decode(event.last.payload));
+        logger.log(userMessage['message'], sender: userMessage['supervisor']);
+        ScaffoldMessenger.of(buildContext).showSnackBar(SnackBar(
+          content: Text(
+              "You have a new message from supervisor:${userMessage['supervisor']}"),
+          action: SnackBarAction(label: "Check", onPressed: () {}),
+        ));
       }
     });
   }
 }
 
-enum SERVERSTATE { up, down, unknown }
+enum SERVERSTATE { up, down, retry, unknown }
