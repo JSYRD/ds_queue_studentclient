@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:ds_queue_studentclient/config.dart';
 import 'package:dartzmq/dartzmq.dart';
 import 'package:ds_queue_studentclient/listinfo.dart';
+import 'package:ds_queue_studentclient/message.dart';
 import 'package:flutter/material.dart';
 
 class ServerConnecter {
@@ -23,10 +24,13 @@ class ServerConnecter {
 
   late final StateSetter setState;
 
-  ServerConnecter(StateSetter stateSetter) {
+  late final MyMessageController logger;
+
+  ServerConnecter(StateSetter stateSetter, MyMessageController logger) {
     setState = stateSetter;
     repSocket = context.createMonitoredSocket(SocketType.dealer);
     listenSocket = context.createMonitoredSocket(SocketType.sub);
+    logger = logger;
     connect();
   }
 

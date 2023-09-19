@@ -1,5 +1,4 @@
-import 'dart:async';
-import 'package:ds_queue_studentclient/listinfo.dart';
+import 'package:ds_queue_studentclient/message.dart';
 import 'package:flutter/material.dart';
 import 'package:ds_queue_studentclient/utils.dart';
 
@@ -39,7 +38,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   late final ServerConnecter sc;
 
-  List<String> _log = [];
+  late final MyMessageController msg;
 
   List<Text> wrapName2Text(List<String> names) {
     List<Text> ret = [];
@@ -53,49 +52,11 @@ class _MyHomePageState extends State<MyHomePage> {
     sc.enterQueue(_nameController.text);
   }
 
-  void clearLog() {
-    setState(() {
-      _log.clear();
-    });
-  }
-
-  static String _fourDigits(int n) {
-    int absN = n.abs();
-    String sign = n < 0 ? "-" : "";
-    if (absN >= 1000) return "$n";
-    if (absN >= 100) return "${sign}0$absN";
-    if (absN >= 10) return "${sign}00$absN";
-    return "${sign}000$absN";
-  }
-
-  static String _twoDigits(int n) {
-    if (n >= 10) return "$n";
-    return "0$n";
-  }
-
-  void log(Object? object, {Object? sender}) {
-    var now = DateTime.now();
-    String y = _fourDigits(now.year);
-    String m = _twoDigits(now.month);
-    String d = _twoDigits(now.day);
-    String h = _twoDigits(now.hour);
-    String min = _twoDigits(now.minute);
-    String sec = _twoDigits(now.second);
-    var currentTime = "[$y-$m-$d $h:$min:$sec]";
-    var newMessage = "$currentTime ${sender ?? 'annoymous'}: $object";
-    List<String> newlog = _log.cast();
-    newlog.add(newMessage);
-    setState(() {
-      _log = newlog;
-    });
-    Future.delayed(const Duration(milliseconds: 20), () {
-      _messageController.jumpTo(_messageController.position.maxScrollExtent);
-    });
-  }
-
   @override
   void initState() {
-    sc = ServerConnecter(setState);
+    msg = MyMessageController(
+        stateSetter: setState, listViewController: _messageController);
+    sc = ServerConnecter(setState, msg);
     super.initState();
   }
 
@@ -105,7 +66,7 @@ class _MyHomePageState extends State<MyHomePage> {
       floatingActionButton: ElevatedButton(
         child: const Icon(Icons.bug_report),
         onPressed: () {
-          log("Debug", sender: "debugger");
+          msg.log("Debug", sender: "debugger");
         },
       ),
       drawer: const Drawer(
@@ -187,9 +148,9 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ),
                       Column(
-                        children: _queue.isEmpty
+                        children: sc.queue.isEmpty
                             ? [const Text("No Student in Queue Currently.")]
-                            : _queue,
+                            : sc.queue,
                       )
                     ]),
                   ),
@@ -207,9 +168,9 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                         ),
                         Column(
-                          children: _supervisors.isEmpty
+                          children: sc.supervisors.isEmpty
                               ? [const Text("No Supervisors Online Currently.")]
-                              : _supervisors,
+                              : sc.supervisors,
                         )
                       ],
                     ),
@@ -292,7 +253,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   controller: _messageController,
                                   shrinkWrap: true,
                                   // reverse: true,
-                                  children: wrapName2Text(_log),
+                                  children: wrapName2Text(msg.logs),
                                 ),
                               ))
                         ],
