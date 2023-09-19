@@ -34,13 +34,10 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<ListInfo> _queue = [];
-  List<ListInfo> _supervisors = [];
-
   final TextEditingController _nameController = TextEditingController();
   final ScrollController _messageController = ScrollController();
 
-  final ServerConnecter sc = ServerConnecter();
+  late final ServerConnecter sc;
 
   List<String> _log = [];
 
@@ -94,6 +91,12 @@ class _MyHomePageState extends State<MyHomePage> {
     Future.delayed(const Duration(milliseconds: 20), () {
       _messageController.jumpTo(_messageController.position.maxScrollExtent);
     });
+  }
+
+  @override
+  void initState() {
+    sc = ServerConnecter(setState);
+    super.initState();
   }
 
   @override

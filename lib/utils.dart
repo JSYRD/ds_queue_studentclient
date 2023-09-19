@@ -3,9 +3,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:ds_queue_studentclient/config.dart';
 import 'package:dartzmq/dartzmq.dart';
+import 'package:flutter/material.dart';
 
 class ServerConnecter {
   final ZContext context = ZContext();
+
+  List<String> queue = [];
+  List<String> supervisors = [];
 
   String? currentUser;
 
@@ -16,7 +20,10 @@ class ServerConnecter {
 
   late final Timer heartbeater;
 
-  ServerConnecter() {
+  late final StateSetter setState;
+
+  ServerConnecter(StateSetter stateSetter) {
+    setState = stateSetter;
     repSocket = context.createMonitoredSocket(SocketType.dealer);
     listenSocket = context.createMonitoredSocket(SocketType.sub);
     connect();
@@ -82,6 +89,7 @@ class ServerConnecter {
       var topic = utf8.decode(event.first.payload);
       if (topic == "queue") {
         print(utf8.decode(event.last.payload));
+        setState(() {});
         //TODO: update queue
       } else if (topic == "supervisors") {
         print(utf8.decode(event.last.payload));
