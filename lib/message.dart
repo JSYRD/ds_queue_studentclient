@@ -78,7 +78,9 @@ class MyMessageController {
       _logs = newlog;
     });
     Future.delayed(const Duration(milliseconds: 20), () {
-      listViewController.jumpTo(listViewController.position.maxScrollExtent);
+      if (listViewController.hasClients) {
+        listViewController.jumpTo(listViewController.position.maxScrollExtent);
+      }
     });
   }
 }
