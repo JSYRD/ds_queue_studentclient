@@ -1,4 +1,5 @@
 import 'package:ds_queue_studentclient/message.dart';
+import 'package:ds_queue_studentclient/welcome.dart';
 import 'package:flutter/material.dart';
 import 'package:ds_queue_studentclient/utils.dart';
 
@@ -16,9 +17,10 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(
-        title: "Queue Client Test",
-      ),
+      // home: const MyHomePage(
+      //   title: "Queue Client Test",
+      // ),
+      home: const WelcomePage(),
     );
   }
 }
@@ -68,6 +70,13 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   @override
+  void dispose() {
+    sc.dispose();
+    // msg.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       floatingActionButton: ElevatedButton(
@@ -75,7 +84,8 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: () {
           // msg.log("Debug", sender: "debugger");
           // sc.reconnect();
-          showSnackBar(const Text("DEBUG"));
+          // showSnackBar(const Text("DEBUG"));
+          Navigator.pop(context);
         },
       ),
       drawer: const Drawer(
@@ -211,7 +221,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                         Column(
                           children: sc.supervisors.isEmpty
-                              ? [const Text("No Supervisors Online Currently.")]
+                              ? [const Text("No Supervisor Online Currently.")]
                               : sc.supervisors,
                         )
                       ],
