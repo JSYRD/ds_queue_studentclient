@@ -38,6 +38,13 @@ class ServerConnecter {
     _connect();
   }
 
+  void dispose() {
+    repSocket.close();
+    listenSocket.close();
+    heartbeater.cancel();
+    context.stop();
+  }
+
   void unsubscribe(String topic) {
     listenSocket.subscribe(topic);
   }
@@ -63,6 +70,7 @@ class ServerConnecter {
       "enterQueue": true,
       "name": name,
       "clientId": "${context.hashCode}"
+      // "clientId": "Leon"
     })))));
     repSocket.sendMessage(newMessage);
   }
@@ -122,7 +130,7 @@ class ServerConnecter {
     });
 
     heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _heartbeat();
+      // _heartbeat();
     });
 
     listenSocket.connect(Config.listenUrl);
