@@ -56,7 +56,7 @@ class SupervisorServerConnecter {
       "supervisor": true,
       "name": name,
       "clientId": "$clientId",
-      "switchTo": status,
+      "status": status,
       "optionalMessage": optionalMessage
     })))));
     repSocket.sendMessage(newMessage);
@@ -94,12 +94,8 @@ class SupervisorServerConnecter {
   void _login() {
     var newMessage = ZMessage();
     newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
-    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
-      "enterQueue": true,
-      "supervisor": true,
-      "name": name,
-      "clientId": "$clientId"
-    })))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode(
+        {"supervisor": true, "name": name, "clientId": "$clientId"})))));
     repSocket.sendMessage(newMessage);
   }
 
@@ -151,12 +147,15 @@ class SupervisorServerConnecter {
           setState(() {
             supervisorstate = SUPERVISORSTATE.pending;
           });
-        } else if (reply.containsKey("currentState")) {
+        } else if (reply.containsKey("status")) {
           setState(() {
-            supervisorstate = reply["currentState"] == "pending"
+            supervisorstate = reply["status"] == "pending"
                 ? SUPERVISORSTATE.pending
                 : SUPERVISORSTATE.available;
           });
+        } else if (reply.containsKey("error")) {
+          logger.log("ERROR CAUGHT ${reply["error"]} : ${reply["msg"]}",
+              sender: "Server:");
         }
       }
     });
@@ -311,7 +310,8 @@ class ServerConnecter {
               sender: "Server");
           subscribe(currentUser!);
         } else if (reply.containsKey("error")) {
-          logger.log("ERROR CAUGHT ${reply["msg"]}", sender: "Server:");
+          logger.log("ERROR CAUGHT ${reply["error"]} : ${reply["msg"]}",
+              sender: "Server:");
         }
       }
     });
@@ -323,6 +323,7 @@ class ServerConnecter {
     listenSocket.connect(Config.listenUrl);
     listenSocket.subscribe("queue");
     listenSocket.subscribe("supervisors");
+    listenSocket.subscribe("supervisorBroadcast");
     listenSocket.messages.listen((event) {
       var topic = utf8.decode(event.first.payload);
       if (topic == "queue") {
@@ -349,7 +350,7 @@ class ServerConnecter {
         setState(() {
           supervisors = newsupervisors;
         });
-      } else if (topic == currentUser) {
+      } else if (topic == currentUser || topic == "supervisorBroadcast") {
         var userMessage = json.decode(utf8.decode(event.last.payload));
         logger.log(userMessage['message'], sender: userMessage['supervisor']);
         ScaffoldMessenger.of(buildContext).showSnackBar(SnackBar(
