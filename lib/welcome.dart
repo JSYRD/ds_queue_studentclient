@@ -1,5 +1,6 @@
+import 'package:ds_queue_studentclient/config.dart';
 import 'package:ds_queue_studentclient/student_home_page.dart';
-import 'package:ds_queue_studentclient/supervisor_home_page.dart';
+import 'package:ds_queue_studentclient/supervisor_login_page.dart';
 import 'package:flutter/material.dart';
 
 class WelcomePage extends StatefulWidget {
@@ -34,9 +35,63 @@ class _WelcomePageState extends State<WelcomePage>
     super.dispose();
   }
 
+  void _pushPage(BuildContext context, Widget route) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: ((context, animation, secondaryAnimation) {
+          return route;
+        }),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.ease;
+
+          var tween =
+              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showDialog(
+              context: context,
+              builder: (context) {
+                TextEditingController c = TextEditingController();
+                return AlertDialog(
+                  title: Text(
+                      "Change base url:(no prefix, no port, only baseUrl)\n (Current baseUrl: ${Config.baseUrl} )"),
+                  content: TextField(
+                    controller: c,
+                  ),
+                  actions: [
+                    ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context, c.text);
+                        },
+                        child: const Text("confirm"))
+                  ],
+                );
+              }).then((value) {
+            if (value != null) {
+              setState(() {
+                Config.baseUrl = value;
+              });
+            }
+          });
+        },
+        child: const Icon(Icons.settings),
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth > constraints.maxHeight) {
@@ -66,28 +121,7 @@ class _WelcomePageState extends State<WelcomePage>
             }),
           ),
           onPressed: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                opaque: false,
-                pageBuilder: ((context, animation, secondaryAnimation) {
-                  return const SupervisorHomePage();
-                }),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(1.0, 0.0);
-                  const end = Offset.zero;
-                  const curve = Curves.ease;
-
-                  var tween = Tween(begin: begin, end: end)
-                      .chain(CurveTween(curve: curve));
-                  return SlideTransition(
-                    position: animation.drive(tween),
-                    child: child,
-                  );
-                },
-              ),
-            );
+            _pushPage(context, const SupervisorLoginPage());
           },
           child: AnimatedContainer(
             width: double.infinity,
@@ -128,42 +162,24 @@ class _WelcomePageState extends State<WelcomePage>
               }),
             ),
             onPressed: () {
-              Navigator.push(
-                context,
-                PageRouteBuilder(
-                  opaque: false,
-                  pageBuilder: ((context, animation, secondaryAnimation) {
-                    return const StudentHomePage();
-                  }),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(1.0, 0.0);
-                    const end = Offset.zero;
-                    const curve = Curves.ease;
-
-                    var tween = Tween(begin: begin, end: end)
-                        .chain(CurveTween(curve: curve));
-                    return SlideTransition(
-                      position: animation.drive(tween),
-                      child: child,
-                    );
-                  },
-                ),
-              );
+              _pushPage(context, const StudentHomePage());
             },
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.group,
-                  size: 40,
-                  color: Colors.black,
-                ),
-                Text(
-                  "I'm Student",
-                  style: TextStyle(color: Colors.black),
-                )
-              ],
+            child: Container(
+              width: double.infinity,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.group,
+                    size: 40,
+                    color: Colors.black,
+                  ),
+                  Text(
+                    "I'm Student",
+                    style: TextStyle(color: Colors.black),
+                  )
+                ],
+              ),
             )));
   }
 
