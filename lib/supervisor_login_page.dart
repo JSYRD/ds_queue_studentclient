@@ -50,7 +50,7 @@ class _SupervisorLoginPageState extends State<SupervisorLoginPage> {
               // margin: EdgeInsets.symmetric(
               //     vertical: constraints.biggest.height - 30,
               //     horizontal: constraints.biggest.width - 30.0),
-              margin: EdgeInsets.all(160.0),
+              margin: const EdgeInsets.all(160.0),
               decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8.0),
                   boxShadow: const [
@@ -121,7 +121,7 @@ class _SupervisorLoginPageState extends State<SupervisorLoginPage> {
                           Padding(
                             padding: const EdgeInsets.all(20.0),
                             child: ElevatedButton(
-                                style: ButtonStyle(),
+                                style: const ButtonStyle(),
                                 onPressed: () {
                                   if (_supervisorNameController
                                       .text.isNotEmpty) {
