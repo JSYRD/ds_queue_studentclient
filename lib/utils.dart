@@ -7,6 +7,193 @@ import 'package:ds_queue_studentclient/listinfo.dart';
 import 'package:ds_queue_studentclient/message.dart';
 import 'package:flutter/material.dart';
 
+class Student {
+  int ticket;
+  String name;
+  Student(this.ticket, this.name);
+}
+
+class SupervisorServerConnecter {
+  final ZContext context = ZContext();
+
+  late int clientId;
+
+  Student? currentStudent;
+
+  String name;
+
+  SERVERSTATE serverState = SERVERSTATE.unknown;
+
+  SUPERVISORSTATE supervisorstate = SUPERVISORSTATE.logging;
+
+  late final MonitoredZSocket repSocket;
+  late final MonitoredZSocket listenSocket;
+
+  late final Timer heartbeater;
+
+  late final StateSetter setState;
+
+  late final MyMessageController logger;
+
+  late final BuildContext buildContext;
+
+  SupervisorServerConnecter(
+      this.setState, this.name, this.logger, this.buildContext) {
+    clientId = context.hashCode;
+    repSocket = context.createMonitoredSocket(SocketType.dealer);
+    listenSocket = context.createMonitoredSocket(SocketType.sub);
+    _connect();
+  }
+
+  void _switchStatus(String status, {String? optionalMessage}) {
+    if (status != "pending" && status != "available") {
+      logger.log("Unknown status", sender: "_switchStatus");
+      return;
+    }
+    var newMessage = ZMessage();
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
+      "supervisor": true,
+      "name": name,
+      "clientId": "$clientId",
+      "switchTo": status,
+      "optionalMessage": optionalMessage
+    })))));
+    repSocket.sendMessage(newMessage);
+  }
+
+  void ready({String? optionalMessage}) {
+    _switchStatus("available", optionalMessage: optionalMessage);
+  }
+
+  void suspend({String? optionalMessage}) {
+    _switchStatus("pending", optionalMessage: optionalMessage);
+  }
+
+  void broadcast(String message) {
+    var newMessage = ZMessage();
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
+      "supervisor": true,
+      "name": name,
+      "clientId": "$clientId",
+      "message": message
+    })))));
+    repSocket.sendMessage(newMessage);
+  }
+
+  void dispose() {
+    repSocket.close();
+    listenSocket.close();
+    heartbeater.cancel();
+    context.stop();
+  }
+
+  // actually this should happen before entering this page, but have no more time lol
+  // actually just enter queue
+  void _login() {
+    var newMessage = ZMessage();
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
+      "enterQueue": true,
+      "supervisor": true,
+      "name": name,
+      "clientId": "$clientId"
+    })))));
+    repSocket.sendMessage(newMessage);
+  }
+
+  void _heartbeat() {
+    var newMessage = ZMessage();
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode(
+        {"name": name, "supervisor": true, "clientId": "$clientId"})))));
+    repSocket.sendMessage(newMessage);
+  }
+
+  void _connect() {
+    repSocket.events.distinct().listen((event) {
+      switch (event.first) {
+        case ZEvent.HANDSHAKE_SUCCEEDED:
+          logger.log("Connected to server", sender: "Client");
+          setState(() {
+            serverState = SERVERSTATE.up;
+          });
+          break;
+        case ZEvent.CLOSED:
+          logger.log("Socket closed.", sender: "Client");
+          setState(() {
+            serverState = SERVERSTATE.down;
+          });
+        case ZEvent.CONNECT_RETRIED:
+          setState(() {
+            serverState = SERVERSTATE.retry;
+          });
+        default:
+          // setState(() {
+          //   serverState = SERVERSTATE.unknown;
+          // });
+          break;
+      }
+      // logger.log(event, sender: "SupervisorServerConnecter");
+    });
+
+    repSocket.connect(Config.replyUrl);
+
+    repSocket.messages.listen((event) {
+      for (var element in event) {
+        if (element.payload.isEmpty) continue;
+        Map<String, dynamic> reply = jsonDecode(utf8.decode(element.payload));
+        if (reply.containsKey("login") &&
+            reply["login"] == true &&
+            reply["name"] == name) {
+          logger.log("Succeed logging.", sender: "Client:");
+          setState(() {
+            supervisorstate = SUPERVISORSTATE.pending;
+          });
+        } else if (reply.containsKey("currentState")) {
+          setState(() {
+            supervisorstate = reply["currentState"] == "pending"
+                ? SUPERVISORSTATE.pending
+                : SUPERVISORSTATE.available;
+          });
+        }
+      }
+    });
+
+    _login();
+
+    heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _heartbeat();
+    });
+
+    listenSocket.connect(Config.listenUrl);
+
+    listenSocket.subscribe(name);
+    listenSocket.messages.listen((event) {
+      var topic = utf8.decode(event.first.payload);
+      if (topic == name) {
+        var next = json.decode(utf8.decode(event.last.payload));
+        // TODO: ticket property maybe string
+        setState(() {
+          currentStudent = Student(next["ticket"], next["name"]);
+          supervisorstate = SUPERVISORSTATE.dealing;
+        });
+        logger.log("Next Student: ${next["name"]}, ticket: ${next["ticket"]}",
+            sender: "Server");
+        logger.log("Now dealing with: ${next["name"]}");
+      }
+    });
+  }
+
+  void reconnect() {
+    repSocket.connect(Config.replyUrl);
+    listenSocket.connect(Config.listenUrl);
+  }
+}
+
+enum SUPERVISORSTATE { available, pending, dealing, logging }
+
 class ServerConnecter {
   final ZContext context = ZContext();
 
@@ -113,6 +300,7 @@ class ServerConnecter {
         if (element.payload.isEmpty) continue;
         Map<String, dynamic> reply = jsonDecode(utf8.decode(element.payload));
         // check if it is queue's ticket
+        // logger.log(reply, sender: "DEBUG");
         if (reply.containsKey("name")) {
           if (currentUser != null) unsubscribe(currentUser!);
           setState(() {
@@ -120,10 +308,10 @@ class ServerConnecter {
           });
           logger.log(
               "Succeed entering queue, current user: $currentUser; ticket: ${reply['ticket']}",
-              sender: "Host");
+              sender: "Server");
           subscribe(currentUser!);
         } else if (reply.containsKey("error")) {
-          logger.log("ERROR CAUGHT", sender: "repSocket.message.listen");
+          logger.log("ERROR CAUGHT ${reply["msg"]}", sender: "Server:");
         }
       }
     });
