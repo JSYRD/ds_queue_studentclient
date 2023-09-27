@@ -78,7 +78,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
 
   List<Widget> _buttons() {
     List<Widget> ret = [];
-    if (sc.supervisorstate == SUPERVISORSTATE.dealing) {
+    if (sc.supervisorstate == SUPERVISORSTATE.occupied) {
       ret.add(Padding(
         padding: const EdgeInsets.all(2.0),
         child: ElevatedButton.icon(
@@ -196,7 +196,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                           return "Available, waiting for student";
                         case SUPERVISORSTATE.pending:
                           return "Suspending";
-                        case SUPERVISORSTATE.dealing:
+                        case SUPERVISORSTATE.occupied:
                           return "Dealing with: ${sc.currentStudent}";
 
                         case SUPERVISORSTATE.logging:
@@ -219,7 +219,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                             return Icons.check;
                           case SUPERVISORSTATE.pending:
                             return Icons.pause;
-                          case SUPERVISORSTATE.dealing:
+                          case SUPERVISORSTATE.occupied:
                             return Icons.group;
                           case SUPERVISORSTATE.logging:
                             return Icons.more_horiz;
