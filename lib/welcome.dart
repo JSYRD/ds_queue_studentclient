@@ -86,6 +86,8 @@ class _WelcomePageState extends State<WelcomePage>
             if (value != null) {
               setState(() {
                 Config.baseUrl = value;
+                Config.listenUrl = "tcp://$value:5555";
+                Config.replyUrl = "tcp://$value:5556";
               });
             }
           });
