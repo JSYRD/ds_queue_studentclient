@@ -94,8 +94,12 @@ class SupervisorServerConnecter {
   void _login() {
     var newMessage = ZMessage();
     newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(''))));
-    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode(
-        {"supervisor": true, "name": name, "clientId": "$clientId"})))));
+    newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
+      "supervisor": true,
+      "enterQueue": true,
+      "name": name,
+      "clientId": "$clientId"
+    })))));
     repSocket.sendMessage(newMessage);
   }
 
@@ -151,7 +155,9 @@ class SupervisorServerConnecter {
           setState(() {
             supervisorstate = reply["status"] == "pending"
                 ? SUPERVISORSTATE.pending
-                : SUPERVISORSTATE.available;
+                : reply["status"] == "available"
+                    ? SUPERVISORSTATE.available
+                    : SUPERVISORSTATE.occupied;
           });
         } else if (reply.containsKey("error")) {
           logger.log("ERROR CAUGHT ${reply["error"]} : ${reply["msg"]}",
@@ -176,11 +182,11 @@ class SupervisorServerConnecter {
         // TODO: ticket property maybe string
         setState(() {
           currentStudent = Student(next["ticket"], next["name"]);
-          supervisorstate = SUPERVISORSTATE.dealing;
+          supervisorstate = SUPERVISORSTATE.occupied;
         });
         logger.log("Next Student: ${next["name"]}, ticket: ${next["ticket"]}",
             sender: "Server");
-        logger.log("Now dealing with: ${next["name"]}");
+        logger.log("Now occupied with: ${next["name"]}");
       }
     });
   }
@@ -191,7 +197,7 @@ class SupervisorServerConnecter {
   }
 }
 
-enum SUPERVISORSTATE { available, pending, dealing, logging }
+enum SUPERVISORSTATE { available, pending, occupied, logging }
 
 class ServerConnecter {
   final ZContext context = ZContext();
