@@ -44,50 +44,140 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
     return ret;
   }
 
-  Widget _messageWidget() {
+  Widget _msg() {
     return Expanded(
-        flex: 2,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 8.0, top: 8.0),
-              child: Text(
-                "Messages",
-                style: TextStyle(
-                    fontSize: 32.0,
-                    fontWeight: FontWeight.bold,
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 1),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 8.0, top: 8.0),
+          child: Text(
+            "Messages",
+            style: TextStyle(
+                fontSize: 32.0,
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+                decorationThickness: 1),
+          ),
+        ),
+        Expanded(
+            child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: ListView(
+            controller: _messageController,
+            shrinkWrap: true,
+            // reverse: true,
+            children: wrapName2Text(msg.logs),
+          ),
+        ))
+      ],
+    ));
+  }
+
+  Widget _queue() {
+    return Expanded(
+      flex: 1,
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 20.0, top: 20.0),
+                child: Text(
+                  'Current Queue:',
+                  style: TextStyle(fontSize: 28),
+                ),
               ),
-            ),
-            Expanded(
-                flex: 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: ListView(
-                    controller: _messageController,
-                    shrinkWrap: true,
-                    // reverse: true,
-                    children: wrapName2Text(msg.logs),
+              Column(
+                children: sc.queue.isEmpty
+                    ? [const Text("No Student in Queue Currently.")]
+                    : sc.queue,
+              )
+            ]),
+          ),
+          Divider(
+            height: 1.0,
+          ),
+          Expanded(
+            child: ListView(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 20.0, top: 20.0),
+                  child: Text(
+                    'Current Supervisors:',
+                    style: TextStyle(fontSize: 28),
                   ),
-                ))
-          ],
-        ));
+                ),
+                Column(
+                  children: sc.supervisors.isEmpty
+                      ? [const Text("No Supervisor Online Currently.")]
+                      : sc.supervisors,
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
   }
 
   List<Widget> _buttons() {
     List<Widget> ret = [];
+    ret.add(Padding(
+      padding: const EdgeInsets.all(2.0),
+      child: ElevatedButton.icon(
+        onPressed: () {
+          //broadcast button
+          showDialog(
+              context: context,
+              builder: (context) {
+                TextEditingController c = TextEditingController();
+                return AlertDialog(
+                  title: const Text("Broadcast to all students:"),
+                  content: TextField(
+                    controller: c,
+                    decoration:
+                        const InputDecoration(hintText: "Broadcast Message"),
+                  ),
+                  actions: [
+                    TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: const Text("cancel")),
+                    ElevatedButton(
+                        onPressed: () {
+                          sc.broadcast(c.text);
+                          Navigator.pop(context);
+                        },
+                        child: const Text("confirm"))
+                  ],
+                );
+              });
+        },
+        icon: const Icon(Icons.wifi),
+        label: const Text("Broadcast"),
+        style: const ButtonStyle(
+            fixedSize: MaterialStatePropertyAll(Size(130, 30))),
+      ),
+    ));
     if (sc.supervisorstate == SUPERVISORSTATE.occupied) {
+      // suspend
       ret.add(Padding(
         padding: const EdgeInsets.all(2.0),
         child: ElevatedButton.icon(
           onPressed: () {
+            TextEditingController c = TextEditingController();
             showDialog(
               context: context,
               builder: (context) {
                 return AlertDialog(
                   title: const Text("Do you want to suspend?"),
+                  content: TextField(
+                    controller: c,
+                    decoration:
+                        const InputDecoration(hintText: "Optional Message"),
+                  ),
                   actions: [
                     TextButton.icon(
                         onPressed: () {
@@ -99,7 +189,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                         onPressed: () {
                           Navigator.pop(context, 1);
                         },
-                        icon: const Icon(Icons.check),
+                        icon: const Icon(Icons.chevron_right),
                         label: const Text("Next"))
                   ],
                 );
@@ -108,9 +198,9 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
               if (value != null) {
                 if (value == 0) {
                   //suspend
-                  sc.suspend();
+                  sc.suspend(optionalMessage: c.text);
                 } else if (value == 1) {
-                  sc.ready();
+                  sc.ready(optionalMessage: c.text);
                 }
               }
             });
@@ -127,7 +217,35 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         padding: const EdgeInsets.all(2.0),
         child: ElevatedButton.icon(
           onPressed: () {
-            sc.ready();
+            TextEditingController c = TextEditingController();
+            showDialog(
+                context: context,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text("Ready?"),
+                    content: TextField(
+                      controller: c,
+                      decoration:
+                          const InputDecoration(hintText: "Optional Message"),
+                    ),
+                    actions: [
+                      TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text("cancel")),
+                      ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context, 1);
+                          },
+                          child: const Text("confirm"))
+                    ],
+                  );
+                }).then((value) {
+              if (value != null) {
+                sc.ready(optionalMessage: c.text);
+              }
+            });
           },
           statesController: _playController,
           icon: const Icon(Icons.play_arrow),
@@ -141,7 +259,35 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         padding: const EdgeInsets.all(2.0),
         child: ElevatedButton.icon(
           onPressed: () {
-            sc.suspend();
+            TextEditingController c = TextEditingController();
+            showDialog(
+                context: context,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text("Suspend?"),
+                    content: TextField(
+                      controller: c,
+                      decoration:
+                          const InputDecoration(hintText: "Optional Message"),
+                    ),
+                    actions: [
+                      TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text("cancel")),
+                      ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context, 1);
+                          },
+                          child: const Text("confirm"))
+                    ],
+                  );
+                }).then((value) {
+              if (value != null) {
+                sc.suspend(optionalMessage: c.text);
+              }
+            });
           },
           statesController: _susController,
           icon: const Icon(Icons.pause),
@@ -163,13 +309,13 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: LayoutBuilder(
         // Top app bar
-        builder: (context, constraints) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 0.0, bottom: 0.0),
-              child: SafeArea(
-                  child: Wrap(
+        builder: (context, constraints) =>
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 0.0, bottom: 0.0),
+            child: SafeArea(
+              top: true,
+              child: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   TextButton(
@@ -181,9 +327,12 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                     },
                     child: const Icon(Icons.arrow_back),
                   ),
-                  const VerticalDivider(
-                    width: 3.0,
-                  ),
+                  // const SizedBox(
+                  //   height: 60.0,
+                  //   child: VerticalDivider(
+                  //     width: 3.0,
+                  //   ),
+                  // ),
                   // supervisor state
                   const Text(
                     "Current State:",
@@ -229,9 +378,12 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                       })()),
                     ),
                   ),
-                  const VerticalDivider(
-                    width: 3.0,
-                  ),
+                  // const SizedBox(
+                  //   height: 60.0,
+                  //   child: VerticalDivider(
+                  //     width: 3.0,
+                  //   ),
+                  // ),
                   //Server state
                   const Text(
                     "Server State:",
@@ -286,18 +438,35 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                   ),
                   Text("(DEBUG ONLY)ClientId: ${sc.context.hashCode}")
                 ],
-              )),
+              ),
             ),
-            const Divider(
-              height: 1.0,
-            ),
-            Expanded(
-                child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [_messageWidget()],
-            )),
-          ],
-        ),
+          ),
+          const Divider(
+            height: 1.0,
+          ),
+          Expanded(
+            child: (constraints.maxWidth > constraints.maxHeight)
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                        _msg(),
+                        const VerticalDivider(
+                          width: 1,
+                        ),
+                        _queue()
+                      ])
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _msg(),
+                      const Divider(
+                        height: 1,
+                      ),
+                      _queue()
+                    ],
+                  ),
+          ),
+        ]),
       ),
     );
   }

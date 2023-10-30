@@ -29,13 +29,19 @@ class SupervisorServerConnecter {
   late final MonitoredZSocket repSocket;
   late final MonitoredZSocket listenSocket;
 
-  late final Timer heartbeater;
+  late Timer heartbeater;
+
+  Timer _timeoutHandler =
+      Timer.periodic(const Duration(seconds: 1), (timer) {});
 
   late final StateSetter setState;
 
   late final MyMessageController logger;
 
   late final BuildContext buildContext;
+
+  List<ListInfo> queue = [];
+  List<ListInfo> supervisors = [];
 
   SupervisorServerConnecter(
       this.setState, this.name, this.logger, this.buildContext) {
@@ -85,8 +91,7 @@ class SupervisorServerConnecter {
   void dispose() {
     repSocket.close();
     listenSocket.close();
-    heartbeater.cancel();
-    context.stop();
+    if (supervisorstate != SUPERVISORSTATE.logging) heartbeater.cancel();
   }
 
   // actually this should happen before entering this page, but have no more time lol
@@ -113,6 +118,7 @@ class SupervisorServerConnecter {
 
   void _connect() {
     repSocket.events.distinct().listen((event) {
+      logger.log(event.first, sender: "MONITOR");
       switch (event.first) {
         case ZEvent.HANDSHAKE_SUCCEEDED:
           logger.log("Connected to server", sender: "Client");
@@ -125,9 +131,25 @@ class SupervisorServerConnecter {
           setState(() {
             serverState = SERVERSTATE.down;
           });
+          heartbeater.cancel();
+          _timeoutHandler = Timer.periodic(const Duration(seconds: 1), (timer) {
+            _login();
+          });
         case ZEvent.CONNECT_RETRIED:
           setState(() {
             serverState = SERVERSTATE.retry;
+          });
+        case ZEvent.DISCONNECTED:
+          setState(() {
+            logger.log("Socket disconnected.", sender: "Client");
+            setState(() {
+              serverState = SERVERSTATE.down;
+            });
+            heartbeater.cancel();
+            _timeoutHandler =
+                Timer.periodic(const Duration(seconds: 1), (timer) {
+              _login();
+            });
           });
         default:
           // setState(() {
@@ -148,16 +170,34 @@ class SupervisorServerConnecter {
             reply["login"] == true &&
             reply["name"] == name) {
           logger.log("Succeed logging.", sender: "Client:");
+          heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
+            _heartbeat();
+          });
+          _timeoutHandler.cancel();
           setState(() {
             supervisorstate = SUPERVISORSTATE.pending;
           });
         } else if (reply.containsKey("status")) {
           setState(() {
-            supervisorstate = reply["status"] == "pending"
-                ? SUPERVISORSTATE.pending
-                : reply["status"] == "available"
-                    ? SUPERVISORSTATE.available
-                    : SUPERVISORSTATE.occupied;
+            switch (reply["status"]) {
+              case "pending":
+                {
+                  supervisorstate = SUPERVISORSTATE.pending;
+                }
+                break;
+              case "available":
+                {
+                  supervisorstate = SUPERVISORSTATE.available;
+                }
+                break;
+              case "occupied":
+                {
+                  supervisorstate = SUPERVISORSTATE.occupied;
+                }
+                break;
+              default:
+                break;
+            }
           });
         } else if (reply.containsKey("error")) {
           logger.log("ERROR CAUGHT ${reply["error"]} : ${reply["msg"]}",
@@ -166,14 +206,9 @@ class SupervisorServerConnecter {
       }
     });
 
-    _login();
-
-    heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _heartbeat();
-    });
-
     listenSocket.connect(Config.listenUrl);
-
+    listenSocket.subscribe("queue");
+    listenSocket.subscribe("supervisors");
     listenSocket.subscribe(name);
     listenSocket.messages.listen((event) {
       var topic = utf8.decode(event.first.payload);
@@ -187,8 +222,34 @@ class SupervisorServerConnecter {
         logger.log("Next Student: ${next["name"]}, ticket: ${next["ticket"]}",
             sender: "Server");
         logger.log("Now occupied with: ${next["name"]}");
+      } else if (topic == "queue") {
+        var tqueue = json.decode(utf8.decode(event.last.payload));
+        List<ListInfo> newqueue = [];
+        for (var element in tqueue) {
+          if (element == null) continue;
+          newqueue.add(ListInfo(
+              title: element['name'], data: "ticket:${element['ticket']}"));
+        }
+        setState(() {
+          queue = newqueue;
+        });
+      } else if (topic == "supervisors") {
+        var tsupervisors = json.decode(utf8.decode(event.last.payload));
+        List<ListInfo> newsupervisors = [];
+        for (var element in tsupervisors) {
+          if (element == null) continue;
+          newsupervisors.add(ListInfo(
+              title: element['name'] +
+                  (element['name'] == name ? "(yourself)" : ''),
+              data:
+                  "status:${element['status']}    ${(element['client'] == 'undefined' || element['status'] != "occupied") ? 'No Client.' : "Client: ${element['client']['name']} Ticket: ${element['client']['ticket']} "}"));
+        }
+        setState(() {
+          supervisors = newsupervisors;
+        });
       }
     });
+    _login();
   }
 
   void reconnect() {
@@ -212,9 +273,10 @@ class ServerConnecter {
   late final MonitoredZSocket repSocket;
   late final MonitoredZSocket listenSocket;
 
-  late final Timer heartbeater;
+  late Timer heartbeater;
 
-  late final Timer _timeoutHandler;
+  Timer _timeoutHandler =
+      Timer.periodic(const Duration(seconds: 1), (timer) {});
 
   late final StateSetter setState;
 
@@ -233,8 +295,8 @@ class ServerConnecter {
   void dispose() {
     repSocket.close();
     listenSocket.close();
-    heartbeater.cancel();
-    context.stop();
+    // heartbeater.cancel();
+    // context.stop();
   }
 
   void unsubscribe(String topic) {
@@ -256,6 +318,7 @@ class ServerConnecter {
   }
 
   void enterQueue(String name) {
+    if (serverState != SERVERSTATE.up) return;
     var newMessage = ZMessage();
     newMessage.add(ZFrame(Uint8List(0)));
     newMessage.add(ZFrame(Uint8List.fromList(utf8.encode(json.encode({
@@ -267,6 +330,7 @@ class ServerConnecter {
   }
 
   void reconnect() {
+    if (serverState == SERVERSTATE.up) return;
     repSocket.connect(Config.replyUrl);
     listenSocket.connect(Config.listenUrl);
   }
@@ -285,10 +349,32 @@ class ServerConnecter {
           setState(() {
             serverState = SERVERSTATE.down;
           });
+          if (currentUser != null) {
+            heartbeater.cancel();
+            _timeoutHandler =
+                Timer.periodic(const Duration(seconds: 1), (timer) {
+              enterQueue(currentUser!);
+            });
+          }
+          break;
         case ZEvent.CONNECT_RETRIED:
           setState(() {
             serverState = SERVERSTATE.retry;
           });
+          break;
+        case ZEvent.DISCONNECTED:
+          logger.log("Socket disconnected...", sender: "Client");
+          setState(() {
+            serverState = SERVERSTATE.down;
+          });
+          if (currentUser != null) {
+            heartbeater.cancel();
+            _timeoutHandler =
+                Timer.periodic(const Duration(seconds: 1), (timer) {
+              enterQueue(currentUser!);
+            });
+          }
+          break;
         default:
           // setState(() {
           //   serverState = SERVERSTATE.unknown;
@@ -315,15 +401,15 @@ class ServerConnecter {
               "Succeed entering queue, current user: $currentUser; ticket: ${reply['ticket']}",
               sender: "Server");
           subscribe(currentUser!);
+          heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
+            _heartbeat();
+          });
+          _timeoutHandler.cancel();
         } else if (reply.containsKey("error")) {
           logger.log("ERROR CAUGHT ${reply["error"]} : ${reply["msg"]}",
               sender: "Server:");
         }
       }
-    });
-
-    heartbeater = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _heartbeat();
     });
 
     listenSocket.connect(Config.listenUrl);
@@ -351,7 +437,7 @@ class ServerConnecter {
           newsupervisors.add(ListInfo(
               title: element['name'],
               data:
-                  "status:${element['status']}    ${element['client'] == 'undefined' ? 'No Client.' : "Client: ${element['client']['name']} Ticket: ${element['client']['ticket']} "}"));
+                  "status:${element['status']}    ${(element['client'] == 'undefined' || element['status'] != "occupied") ? 'No Client.' : "Client: ${element['client']['name']} Ticket: ${element['client']['ticket']} "}"));
         }
         setState(() {
           supervisors = newsupervisors;
@@ -359,11 +445,13 @@ class ServerConnecter {
       } else if (topic == currentUser || topic == "supervisorBroadcast") {
         var userMessage = json.decode(utf8.decode(event.last.payload));
         logger.log(userMessage['message'], sender: userMessage['supervisor']);
-        ScaffoldMessenger.of(buildContext).showSnackBar(SnackBar(
-          content: Text(
-              "You have a new message from supervisor:${userMessage['supervisor']}"),
-          action: SnackBarAction(label: "Check", onPressed: () {}),
-        ));
+        ScaffoldMessenger.of(buildContext).showSnackBar(
+          SnackBar(
+            content: Text(
+                "You have a new message from supervisor:${userMessage['supervisor']}"),
+            action: SnackBarAction(label: "Check", onPressed: () {}),
+          ),
+        );
       }
     });
   }

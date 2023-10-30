@@ -224,86 +224,87 @@ class _StudentHomePageState extends State<StudentHomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-                padding: const EdgeInsets.only(top: 0.0, bottom: 0.0),
-                child: SafeArea(
-                  top: true,
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      TextButton(
-                        style: const ButtonStyle(
-                            minimumSize:
-                                MaterialStatePropertyAll(Size(60.0, 60.0))),
+              padding: const EdgeInsets.only(top: 0.0, bottom: 0.0),
+              child: SafeArea(
+                top: true,
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TextButton(
+                      style: const ButtonStyle(
+                          minimumSize:
+                              MaterialStatePropertyAll(Size(60.0, 60.0))),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Icon(Icons.arrow_back),
+                    ),
+                    TextButton(
+                      style: const ButtonStyle(
+                          minimumSize:
+                              MaterialStatePropertyAll(Size(60.0, 60.0))),
+                      onPressed: () {
+                        Scaffold.of(context).openDrawer();
+                      },
+                      child: const Icon(Icons.menu_open),
+                    ),
+                    const Text(
+                      "Current State:",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Tooltip(
+                      message: (() {
+                        switch (sc.serverState) {
+                          case SERVERSTATE.unknown:
+                            return "Unknown, tap to reconnect";
+                          case SERVERSTATE.up:
+                            return "Connected.";
+                          case SERVERSTATE.down:
+                            return "Disconnected, tap to reconnect";
+                          case SERVERSTATE.retry:
+                            return "Retrying...";
+                          default:
+                            return "Unknown";
+                        }
+                      })(),
+                      child: TextButton(
+                        style: ButtonStyle(
+                          padding: MaterialStateProperty.all(
+                              const EdgeInsets.all(10.0)),
+                          minimumSize:
+                              MaterialStateProperty.all(const Size(20, 20)),
+                        ),
                         onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        child: const Icon(Icons.arrow_back),
-                      ),
-                      TextButton(
-                        style: const ButtonStyle(
-                            minimumSize:
-                                MaterialStatePropertyAll(Size(60.0, 60.0))),
-                        onPressed: () {
-                          Scaffold.of(context).openDrawer();
-                        },
-                        child: const Icon(Icons.menu_open),
-                      ),
-                      const Text(
-                        "Current State:",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Tooltip(
-                        message: (() {
                           switch (sc.serverState) {
                             case SERVERSTATE.unknown:
-                              return "Unknown, tap to reconnect";
-                            case SERVERSTATE.up:
-                              return "Connected.";
+                              sc.reconnect();
+                              break;
                             case SERVERSTATE.down:
-                              return "Disconnected, tap to reconnect";
-                            case SERVERSTATE.retry:
-                              return "Retrying...";
+                              sc.reconnect();
+                              break;
                             default:
-                              return "Unknown";
+                            // msg.log("UNKNOWN");
                           }
-                        })(),
-                        child: TextButton(
-                          style: ButtonStyle(
-                            padding: MaterialStateProperty.all(
-                                const EdgeInsets.all(10.0)),
-                            minimumSize:
-                                MaterialStateProperty.all(const Size(20, 20)),
-                          ),
-                          onPressed: () {
-                            switch (sc.serverState) {
-                              case SERVERSTATE.unknown:
-                                sc.reconnect();
-                                break;
-                              case SERVERSTATE.down:
-                                sc.reconnect();
-                                break;
-                              default:
-                              // msg.log("UNKNOWN");
-                            }
-                          },
-                          child: Icon((() {
-                            switch (sc.serverState) {
-                              case SERVERSTATE.up:
-                                return Icons.check;
-                              case SERVERSTATE.down:
-                                return Icons.clear;
-                              case SERVERSTATE.retry:
-                                return Icons.more_horiz;
-                              default:
-                                return Icons.refresh;
-                            }
-                          })()),
-                        ),
+                        },
+                        child: Icon((() {
+                          switch (sc.serverState) {
+                            case SERVERSTATE.up:
+                              return Icons.check;
+                            case SERVERSTATE.down:
+                              return Icons.clear;
+                            case SERVERSTATE.retry:
+                              return Icons.more_horiz;
+                            default:
+                              return Icons.refresh;
+                          }
+                        })()),
                       ),
-                      Text("(DEBUG ONLY)ClientId: ${sc.context.hashCode}")
-                    ],
-                  ),
-                )),
+                    ),
+                    Text("(DEBUG ONLY)ClientId: ${sc.context.hashCode}")
+                  ],
+                ),
+              ),
+            ),
             const Divider(
               height: 1.0,
             ),
