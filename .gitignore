@@ -133,3 +133,7 @@ app.*.symbols
 
 # unecessary binary files
 native-libraries/*
+
+/test/*.zip
+/test/*.jar
+
