@@ -346,7 +346,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                         case SUPERVISORSTATE.pending:
                           return "Suspending";
                         case SUPERVISORSTATE.occupied:
-                          return "Dealing with: ${sc.currentStudent}";
+                          return "Dealing with: ${sc.currentStudent!.name}";
 
                         case SUPERVISORSTATE.logging:
                           return "logging in...";

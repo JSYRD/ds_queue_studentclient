@@ -132,6 +132,7 @@ class SupervisorServerConnecter {
             serverState = SERVERSTATE.down;
           });
           heartbeater.cancel();
+          _timeoutHandler.cancel();
           _timeoutHandler = Timer.periodic(const Duration(seconds: 1), (timer) {
             _login();
           });
@@ -146,6 +147,7 @@ class SupervisorServerConnecter {
               serverState = SERVERSTATE.down;
             });
             heartbeater.cancel();
+            _timeoutHandler.cancel();
             _timeoutHandler =
                 Timer.periodic(const Duration(seconds: 1), (timer) {
               _login();
@@ -350,6 +352,7 @@ class ServerConnecter {
             serverState = SERVERSTATE.down;
           });
           if (currentUser != null) {
+            _timeoutHandler.cancel();
             heartbeater.cancel();
             _timeoutHandler =
                 Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -368,6 +371,7 @@ class ServerConnecter {
             serverState = SERVERSTATE.down;
           });
           if (currentUser != null) {
+            _timeoutHandler.cancel();
             heartbeater.cancel();
             _timeoutHandler =
                 Timer.periodic(const Duration(seconds: 1), (timer) {
